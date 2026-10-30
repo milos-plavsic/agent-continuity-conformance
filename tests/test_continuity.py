@@ -495,3 +495,18 @@ def test_stale_pending_evidence_cannot_regress_verified_operation(active_system)
     with pytest.raises(InvalidTransition):
         store.reconcile("op-1",1,pending_evidence)
     assert store.get_operation("op-1")["state"] == OperationState.VERIFIED
+
+
+def test_repeated_provider_lookup_with_conflicting_request_identity_is_rejected(active_system, monkeypatch):
+    from continuity_conformance.models import ProviderRecord
+
+    store,provider,service = active_system
+    service.submit("op-1",1)
+    monkeypatch.setattr(
+        provider,
+        "lookup",
+        lambda key: ProviderRecord(key,"provider-conflict","completed","test-payload"),
+    )
+    with pytest.raises(ValueError,match="conflicts"):
+        service.reconcile("op-1",1)
+    assert store.get_operation("op-1")["state"] == OperationState.COMMITTED
