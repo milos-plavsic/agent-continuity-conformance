@@ -7,6 +7,7 @@ name = "execution-continuity-conformance"
 version = "0.1.0"
 description = "Reference implementation and adversarial tests for distributed operation continuity."
 readme = "README.md"
+authors = [{ name = "milos-plavsic" }]
 requires-python = ">=3.11"
 license = { text = "MIT" }
 classifiers = ["Development Status :: 3 - Alpha", "License :: OSI Approved :: MIT License", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Programming Language :: Python :: 3.13", "Topic :: Software Development :: Testing", "Topic :: System :: Distributed Computing"]
