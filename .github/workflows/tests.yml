@@ -43,7 +43,7 @@ jobs:
           python -m pytest --cov=continuity_conformance --cov-branch --cov-report=term-missing --json-report --json-report-file=test-artifacts/pytest-report.json
       - name: Upload machine-readable test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pytest-report-python-${{ matrix.python-version }}
           path: test-artifacts/pytest-report.json
