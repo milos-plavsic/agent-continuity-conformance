@@ -35,6 +35,7 @@ def test_lost_response_is_reconciled_without_duplicate_effect(active_system):
     store,provider,service = active_system
     with pytest.raises(ResponseLost):
         service.submit("op-1",1,lose_response=True)
+    assert store.get_operation("op-1")["state"] == OperationState.INCONCLUSIVE
     service.handover("op-1",1)
     provider.complete("op-1")
     final = service.reconcile("op-1",2)
