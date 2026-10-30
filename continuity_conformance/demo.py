@@ -11,6 +11,7 @@ from .provider import DeterministicProvider
 from .service import ContinuityService
 from .store import OperationStore
 
+
 def run_demo(database: str | Path) -> dict[str,object]:
     store = OperationStore(database)
     provider = DeterministicProvider()
