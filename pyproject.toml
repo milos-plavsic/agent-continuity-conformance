@@ -24,6 +24,7 @@ include = ["continuity_conformance*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+filterwarnings = ["error::ResourceWarning"]
 
 [tool.ruff]
 line-length = 100
