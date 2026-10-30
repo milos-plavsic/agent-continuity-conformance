@@ -35,7 +35,7 @@ The project is intended to be usable across services, queues, workflow engines, 
 
 ## Current status
 
-<badge>Specification and baseline phase</badge>
+**Status: Specification and baseline phase**
 
 This repository currently contains design documentation and a proposed conformance model. It does not yet claim a completed executable test suite, production implementation, independent certification, or third-party interoperability.
 
