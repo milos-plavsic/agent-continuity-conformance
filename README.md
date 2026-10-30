@@ -94,6 +94,7 @@ Two related cases are tested separately: a stale generation arriving after hando
 | [ROADMAP.md](ROADMAP.md) | Remaining implementation and validation work |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution and change-control process |
 | [SECURITY.md](SECURITY.md) | Security reporting guidance |
+| [REPOSITORY_SETTINGS.md](REPOSITORY_SETTINGS.md) | Recommended GitHub branch protection and security settings |
 | [examples/incident-recovery.md](examples/incident-recovery.md) | Worked delayed-request recovery scenario |
 
 ## Current status
