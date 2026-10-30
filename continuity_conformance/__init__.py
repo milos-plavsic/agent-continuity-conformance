@@ -1,5 +1,11 @@
 """Reference implementation for execution continuity conformance."""
-from .errors import InvalidTransition, OperationNotFound, ProviderUnavailable, ResponseLost, StaleGeneration
+from .errors import (
+    InvalidTransition,
+    OperationNotFound,
+    ProviderUnavailable,
+    ResponseLost,
+    StaleGeneration,
+)
 from .models import OperationState, ProviderRecord
 from .provider import DeterministicProvider
 from .service import ContinuityService
