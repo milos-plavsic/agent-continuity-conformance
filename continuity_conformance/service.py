@@ -1,6 +1,8 @@
 """Service layer enforcing a serialized local admission and handover boundary."""
 from __future__ import annotations
+
 import threading
+
 from .errors import ProviderUnavailable, ResponseLost
 from .provider import DeterministicProvider
 from .store import OperationStore
