@@ -1,95 +1,83 @@
 # Roadmap
 
-## Guiding constraint
+## Current status
 
-Build the smallest useful conformance package. Do not expand into a general orchestration platform, universal authorization framework, or multi-provider integration catalogue.
-
-Every phase should produce a reviewable artifact and a reproducible acceptance result.
-
-## Phase 0: Specification baseline
-
-**Status:** Documentation drafted; review required.
-
-Deliverables:
-
-- Architecture and lifecycle model.
-- Threat model and explicit assumptions.
-- Provider-boundary semantics.
-- Compatibility concepts.
-- Adversarial test catalogue.
-- Worked incident-recovery scenario.
-
-Acceptance:
-
-- Terms are consistent across documents.
-- Every lifecycle state has a defined meaning.
-- Provider admission is distinguished from provider completion.
-- The delayed admitted-request case is explicitly covered.
-- No implementation or test result is claimed without evidence.
+- **Phase 0, specification baseline:** complete as an initial draft.
+- **Phase 1, minimal executable reference:** implemented for a single-process reference deployment.
+- **Phase 2, adversarial conformance suite:** initial tests are implemented; the full catalogue is not yet covered.
+- **Phase 3, portable signed evidence:** not started. The current event chain is a tamper-evident hash chain, not signed evidence.
+- **Phase 4, independent interoperability exercise:** not started.
+- **Phase 5, release candidate:** not started.
 
 ## Phase 1: Minimal executable reference
 
-Deliverables:
+Implemented:
 
-- Small operation registry.
-- Ownership-generation transitions.
-- Protected execution boundary.
-- Deterministic fake provider.
+- SQLite operation registry.
+- Lifecycle state transitions.
+- Monotonic ownership generations.
+- Per-operation in-process admission and handover serialization.
 - Stable operation and attempt identities.
-- Durable event/evidence records.
+- Deterministic provider simulator.
+- Provider admission and completion separation.
+- Lost-acknowledgement recovery.
+- Event hash-chain verification.
+- Runnable command-line demonstration.
 
-Acceptance:
-
-- Tests demonstrate monotonic generations.
-- Stale requests are rejected at the protected boundary.
-- Conflicting transitions are rejected.
-- Restart reconstructs state from durable records.
+Known limitation: the per-operation lock is process-local. It does not provide cross-process or cross-host fencing.
 
 ## Phase 2: Adversarial conformance suite
 
-Deliverables:
+Initial automated coverage includes:
 
-- Deterministic event scheduler or equivalent test harness.
-- Fault injection for delay, duplication, reordering, crash, and response loss.
-- Tests T01-T12 from CONFORMANCE.md.
-- Machine-readable test results.
+- Stale generation rejected before provider admission.
+- Lost acknowledgement reconciled without duplicate provider effect.
+- Provider completion delayed until after ownership transfer.
+- Provider unavailability preserved as INCONCLUSIVE.
+- Duplicate provider admission deduplicated by stable key.
+- Process restart and durable state recovery.
+- Monotonic generation and invalid transition checks.
+- Event modification and deletion detection.
+- Independent operation identity scopes.
 
-Acceptance:
+Remaining work:
 
-- Every required scenario has an explicit result.
-- The delayed admitted-request scenario is distinct from duplicate delivery.
-- INCONCLUSIVE is preserved when provider evidence is insufficient.
-- Test runs are repeatable from a clean checkout.
+1. Add deterministic concurrent-owner race tests.
+2. Add a provider simulator with conflicting and malformed status responses.
+3. Add explicit replay and cross-operation evidence substitution tests.
+4. Add property-based transition testing if it materially improves coverage.
+5. Publish a machine-readable test result format.
 
-## Phase 3: Evidence package and verifier
+## Phase 3: Portable evidence package
 
 Deliverables:
 
 - Versioned evidence envelope.
-- Integrity protection and trust configuration.
+- Issuer identity and signature coverage.
+- Trust-root and revocation policy.
 - Offline verification utility.
-- Tampering and replay test vectors.
+- Tampering, substitution, and replay test vectors.
 
 Acceptance:
 
 - Modified protected content is rejected.
 - Wrong-operation and stale-evidence replay are rejected.
-- Trust-root and revocation assumptions are documented.
-- Verification output distinguishes valid signature from factual truth.
+- Trust-root assumptions are explicit.
+- A valid signature is not represented as proof that an assertion is factually true.
 
 ## Phase 4: Independent interoperability exercise
 
 Deliverables:
 
 - Two separately implemented contract participants or adapters.
-- Shared versioned test vectors.
+- Shared, versioned test vectors.
 - Reproducible integration report.
 
 Acceptance:
 
 - Both implementations pass the same required vectors.
 - Deviations and unsupported provider capabilities are published.
-- No interoperability claim is made from tests performed against only one implementation.
+- No interoperability claim is made from testing only one implementation.
 
 ## Phase 5: Release candidate
 
@@ -100,31 +88,15 @@ Deliverables:
 - Reference implementation.
 - Security review notes.
 - Example evidence bundle.
-- Release and compatibility policy.
+- Compatibility and release policy.
 
 Acceptance:
 
 - Clean-environment instructions work.
-- All published results can be independently reproduced.
+- Published results can be independently reproduced.
 - Known limitations are visible.
-- License is selected and included before public reuse is invited.
+- License and ownership details are confirmed before wider distribution.
 
-## Explicit exclusions
+## Scope constraint
 
-Unless a concrete conformance requirement demands otherwise, do not add:
-
-- Multiple cloud deployment examples.
-- A generic workflow designer.
-- Broad provider-specific adapter collections.
-- An extensible policy language.
-- A dashboard that does not improve verification.
-- Benchmark claims without reproducible baselines.
-- Compatibility claims based only on shared terminology.
-
-## Immediate next steps
-
-1. Review and freeze the terminology in the current documents.
-2. Choose the implementation language and test runner.
-3. Define the minimal persistent record model.
-4. Implement the deterministic fake provider and operation registry.
-5. Build T01, T05, and T06 first, because they exercise the most important distinction between stale admission, ambiguous response, and delayed provider effect.
+Do not add broad orchestration features, a general-purpose policy language, multiple cloud deployments, or a large adapter catalogue unless a concrete conformance requirement needs them. Prioritize deterministic tests at the provider boundary.
