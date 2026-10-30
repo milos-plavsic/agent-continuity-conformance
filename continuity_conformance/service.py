@@ -8,6 +8,7 @@ from .models import ProviderRecord
 from .provider import DeterministicProvider
 from .store import OperationStore
 
+
 class ContinuityService:
     """Coordinate ownership, provider admission, and reconciliation.
 
