@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
@@ -436,7 +437,7 @@ def test_provider_failure_evidence_is_bound_and_terminal(active_system):
 def test_generated_lifecycle_sequences_preserve_invariants(tmp_path, commands):
     from continuity_conformance.models import ProviderRecord
 
-    store = OperationStore(tmp_path / "generated.sqlite3")
+    store = OperationStore(tmp_path / f"generated-{uuid.uuid4().hex}.sqlite3")
     store.create_operation("generated","generated-payload")
     store.approve("generated")
     store.activate("generated")
