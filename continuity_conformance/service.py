@@ -29,6 +29,10 @@ class ContinuityService:
             attempt = self.store.prepare_attempt(operation_id,generation)
             record = self.provider.admit(attempt["provider_key"],attempt["payload"])
             if lose_response:
+                self.store.mark_inconclusive(
+                    operation_id,generation,attempt["attempt_id"],
+                    "Provider admission may have succeeded but the acknowledgement was lost",
+                )
                 raise ResponseLost("Provider admitted the request; acknowledgement was lost")
             self.store.mark_committed(operation_id,generation,attempt["attempt_id"],record.request_id)
             return {"attempt_id":attempt["attempt_id"],"provider_request_id":record.request_id,
