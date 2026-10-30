@@ -28,7 +28,7 @@ The repository includes a runnable Python reference implementation with:
 - Durable `INCONCLUSIVE` state when a provider acknowledgement is lost or status is unavailable.
 - A SHA-256 chained event log with a verifier for accidental or unauthorized event modification.
 - A command-line demonstration of delayed provider completion after ownership transfer.
-- Automated tests and GitHub Actions CI for Python 3.11, 3.12, and 3.13.
+- Automated tests and GitHub Actions CI for Python 3.11, 3.12, 3.13, and 3.14.
 
 ## Quick start
 
@@ -101,7 +101,7 @@ Two related cases are tested separately: a stale generation arriving after hando
 
 **Status: Working reference implementation; conformance suite in progress.**
 
-The current automated suite contains 46 tests, including generated lifecycle sequences, separate-process handover races, provider evidence substitution, malformed responses, and recovery after a failure between remote admission and local persistence. CI runs the suite on Python 3.11, 3.12, and 3.13, measures branch coverage, and publishes a machine-readable pytest report. The workflow also runs Ruff, mypy, pip-audit, and a non-editable wheel installation check. Separate workflows run CodeQL, full-history secret scanning, and scheduled dependency updates. The broader conformance catalogue still contains scenarios that are not yet implemented.
+The current automated suite contains 46 tests, including generated lifecycle sequences, separate-process handover races, provider evidence substitution, malformed responses, and recovery after a failure between remote admission and local persistence. CI runs the suite on Python 3.11, 3.12, 3.13, and 3.14, measures branch coverage, and publishes a machine-readable pytest report. The workflow also runs Ruff, mypy, pip-audit, and a non-editable wheel installation check. Separate workflows run CodeQL, full-history secret scanning, and scheduled dependency updates. The broader conformance catalogue still contains scenarios that are not yet implemented.
 
 This is a reference implementation, not a production-ready distributed coordination service or an independent certification. The provider is simulated; no real provider adapter is included.
 
