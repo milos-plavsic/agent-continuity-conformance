@@ -40,14 +40,16 @@ Initial automated coverage includes:
 - Monotonic generation and invalid transition checks.
 - Event modification and deletion detection.
 - Independent operation identity scopes.
+- Concurrent handover attempts with exactly one successful generation advance.
+- Malformed event data rejected by the integrity verifier.
+- Installed command-line entry point exercised in CI.
 
 Remaining work:
 
-1. Add deterministic concurrent-owner race tests.
-2. Add a provider simulator with conflicting and malformed status responses.
-3. Add explicit replay and cross-operation evidence substitution tests.
-4. Add property-based transition testing if it materially improves coverage.
-5. Publish a machine-readable test result format.
+1. Add a provider simulator with conflicting and malformed status responses.
+2. Add explicit replay and cross-operation evidence substitution tests.
+3. Add property-based transition testing if it materially improves coverage.
+4. Publish a machine-readable test result format.
 
 ## Phase 3: Portable evidence package
 
