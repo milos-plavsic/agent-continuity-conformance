@@ -7,3 +7,15 @@ def test_demo_reports_single_verified_effect(tmp_path):
     assert result["provider_admissions"] == 1
     assert result["provider_effects"] == 1
     assert result["event_chain_valid"] is True
+
+def test_installed_console_command_runs():
+    import json
+    import subprocess
+
+    completed = subprocess.run(
+        ["continuity-demo"], capture_output=True, text=True, check=True
+    )
+    result = json.loads(completed.stdout)
+    assert result["state"] == "VERIFIED"
+    assert result["provider_admissions"] == 1
+    assert result["provider_effects"] == 1
