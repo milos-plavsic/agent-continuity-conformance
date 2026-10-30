@@ -31,10 +31,10 @@ class OperationStore:
     def _connect(self) -> Iterator[sqlite3.Connection]:
         """Yield a transactional connection and always close its file descriptor."""
         connection = sqlite3.connect(self.database, timeout=10, isolation_level="DEFERRED")
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 10000")
         try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA busy_timeout = 10000")
             with connection:
                 yield connection
         finally:
