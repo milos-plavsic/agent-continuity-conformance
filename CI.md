@@ -12,7 +12,7 @@ Each matrix job:
 1. Installs the package and development tools.
 2. Runs Ruff lint checks.
 3. Runs mypy static type checks.
-4. Runs pytest with branch coverage and a machine-readable JSON report.
+4. Runs pytest with branch coverage, an enforced 85% minimum, and a machine-readable JSON report.
 5. Audits installed dependencies with pip-audit.
 6. Builds a wheel and installs it into a clean virtual environment.
 7. Imports the installed package and executes the installed console command.
