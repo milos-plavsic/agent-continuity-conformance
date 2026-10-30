@@ -109,6 +109,8 @@ No local protocol can guarantee exactly-once effects across an arbitrary provide
 
 Cryptographic integrity does not establish factual correctness. A trusted component can sign a false statement. Independent evidence sources, constrained issuer authority, and explicit verification procedures reduce but do not eliminate this risk.
 
+A hash chain without an externally retained checkpoint cannot detect deletion of a trailing suffix. An attacker with full write access to the evidence store may also recompute the chain. Stronger tamper resistance requires externally anchored checkpoints or signatures under separately controlled keys.
+
 ## 10. Out of scope
 
 This document does not claim to solve general host compromise, malicious administrators with unrestricted infrastructure control, arbitrary provider dishonesty, or all distributed consensus problems. Implementations should add deployment-specific threat analysis.
