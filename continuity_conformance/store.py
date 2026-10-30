@@ -145,6 +145,29 @@ class OperationStore:
                                {"attempt_id":attempt_id,"provider_request_id":request_id})
         return self.get_operation(operation_id)
 
+    def mark_inconclusive(self, operation_id: str, generation: int, attempt_id: str,
+                          reason: str) -> dict[str, Any]:
+        """Persist an ambiguous provider outcome before returning control to the caller."""
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = self._require(db,operation_id)
+            self._check_generation(row,generation)
+            if row["state"] != OperationState.PREPARED.value:
+                raise InvalidTransition(f"Cannot mark an attempt inconclusive in {row['state']} state")
+            attempt = db.execute("SELECT * FROM attempts WHERE attempt_id=? AND operation_id=?",
+                                 (attempt_id,operation_id)).fetchone()
+            if attempt is None:
+                raise OperationNotFound(f"Attempt {attempt_id!r} does not exist")
+            changed = db.execute("UPDATE operations SET state=?,version=version+1 WHERE operation_id=? AND generation=? AND state=?",
+                                 (OperationState.INCONCLUSIVE.value,operation_id,generation,
+                                  OperationState.PREPARED.value)).rowcount
+            if changed != 1:
+                raise InvalidTransition("Inconclusive transition lost a concurrent state race")
+            db.execute("UPDATE attempts SET status='unknown' WHERE attempt_id=?",(attempt_id,))
+            self._append_event(db,operation_id,generation,"PROVIDER_OUTCOME_INCONCLUSIVE",
+                               {"attempt_id":attempt_id,"reason":reason})
+        return self.get_operation(operation_id)
+
     def transfer(self, operation_id: str, generation: int) -> dict[str, Any]:
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
