@@ -24,7 +24,11 @@ On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`.
 ## Run tests
 
 ```bash
-python -m pytest
+ruff check .
+mypy --ignore-missing-imports continuity_conformance
+python -m pytest --cov=continuity_conformance --cov-branch --cov-report=term-missing --json-report --json-report-file=pytest-report.json
+pip-audit
+python -m build --wheel
 ```
 
 ## Run the demonstration
