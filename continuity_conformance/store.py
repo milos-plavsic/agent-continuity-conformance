@@ -1,12 +1,14 @@
 """SQLite operation registry with generation checks and a chained event log."""
 from __future__ import annotations
+
 import hashlib
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
 from .errors import InvalidTransition, OperationNotFound, StaleGeneration
 from .models import OperationState, ProviderRecord
 
@@ -55,7 +57,7 @@ class OperationStore:
                       event_type: str, details: dict[str, Any]) -> None:
         previous = db.execute("SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone()
         previous_hash = "0" * 64 if previous is None else str(previous["event_hash"])
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
         body = {"operation_id": operation_id, "generation": generation, "event_type": event_type,
                 "details": details, "created_at": created_at, "previous_hash": previous_hash}
         digest = hashlib.sha256(_canonical(body).encode()).hexdigest()
