@@ -6,7 +6,7 @@
 - Git
 - A terminal
 
-The runtime uses only the Python standard library. Pytest is used for development tests.
+The runtime uses only the Python standard library. The optional test extra installs pytest, Hypothesis, pytest-cov, pytest-json-report, Ruff, mypy, build, and pip-audit for development and verification.
 
 ## Install
 
