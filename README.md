@@ -100,7 +100,7 @@ Two related cases are tested separately: a stale generation arriving after hando
 
 **Status: Working reference implementation; conformance suite in progress.**
 
-The current automated suite contains 28 tests and has passed the GitHub Actions matrix on Python 3.11, 3.12, and 3.13. The broader conformance catalogue contains additional scenarios that are not yet implemented.
+The current automated suite contains 44 tests, including generated lifecycle sequences, separate-process handover races, provider evidence substitution, malformed responses, and recovery after a failure between remote admission and local persistence. CI runs the suite on Python 3.11, 3.12, and 3.13, measures branch coverage, and publishes a machine-readable pytest report. The workflow also runs Ruff, mypy, pip-audit, and a non-editable wheel installation check. Separate workflows run CodeQL, full-history secret scanning, and scheduled dependency updates. The broader conformance catalogue still contains scenarios that are not yet implemented.
 
 This is a reference implementation, not a production-ready distributed coordination service or an independent certification. The provider is simulated; no real provider adapter is included.
 
