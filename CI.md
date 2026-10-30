@@ -5,7 +5,7 @@ The repository uses GitHub Actions to run repeatable quality and security checks
 ## Test and quality matrix
 
 The `.github/workflows/tests.yml` workflow runs on pushes to `main`, pull requests
-targeting `main`, and manual dispatch. It covers Python 3.11, 3.12, 3.13, and 3.14.
+targeting `main`, and manual dispatch. It covers Python 3.11, 3.12, 3.13, 3.14, and 3.15.
 
 Each matrix job:
 
