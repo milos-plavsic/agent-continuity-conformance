@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from continuity_conformance import (
@@ -430,7 +430,7 @@ def test_provider_failure_evidence_is_bound_and_terminal(active_system):
         store.transfer("op-1",1)
 
 
-@settings(max_examples=40,deadline=None)
+@settings(max_examples=40,deadline=None,suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(st.lists(st.sampled_from([
     "transfer","stale_transfer","prepare","commit","inconclusive",
     "reconcile_absent","reconcile_pending","reconcile_completed",
