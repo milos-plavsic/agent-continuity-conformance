@@ -50,7 +50,7 @@ jobs:
           path: test-artifacts/pytest-report.json
           if-no-files-found: warn
       - name: Audit installed dependencies
-        run: pip-audit
+        run: pip-audit --skip-editable
       - name: Build wheel
         run: python -m build --wheel
       - name: Verify non-editable wheel installation
