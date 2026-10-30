@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import tempfile
+from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
@@ -20,6 +21,12 @@ from continuity_conformance import (
     ResponseLost,
     StaleGeneration,
 )
+
+
+def _execute_sql(database: str, statement: str, parameters: tuple = ()) -> None:
+    with closing(sqlite3.connect(database)) as connection:
+        connection.execute(statement,parameters)
+        connection.commit()
 
 
 def activate(store: OperationStore, operation_id: str = "op-1") -> None:
@@ -145,16 +152,14 @@ def test_terminal_operation_cannot_be_transferred(active_system):
 def test_event_chain_detects_modified_event(active_system):
     store,_,_ = active_system
     assert store.verify_event_chain()
-    with sqlite3.connect(store.database) as db:
-        db.execute("UPDATE events SET details_json=? WHERE sequence=1",('{"payload":"modified"}',))
+    _execute_sql(store.database,"UPDATE events SET details_json=? WHERE sequence=1",('{"payload":"modified"}',))
     assert not store.verify_event_chain()
 
 def test_event_chain_detects_deleted_middle_event(active_system):
     store,_,service = active_system
     service.handover("op-1",1)
     assert store.verify_event_chain()
-    with sqlite3.connect(store.database) as db:
-        db.execute("DELETE FROM events WHERE sequence=2")
+    _execute_sql(store.database,"DELETE FROM events WHERE sequence=2")
     assert not store.verify_event_chain()
 
 def test_two_operations_have_independent_idempotency_scopes(system):
@@ -225,8 +230,7 @@ def test_second_service_instance_observes_fenced_generation(active_system):
 
 def test_hash_chain_returns_false_for_malformed_event_json(active_system):
     store,_,_ = active_system
-    with sqlite3.connect(store.database) as db:
-        db.execute("UPDATE events SET details_json=? WHERE sequence=1",("{",))
+    _execute_sql(store.database,"UPDATE events SET details_json=? WHERE sequence=1",("{",))
     assert store.verify_event_chain() is False
 
 def test_concurrent_handover_has_one_winner(active_system):
@@ -268,8 +272,7 @@ def test_commit_requires_prepared_current_generation_attempt(active_system):
 def test_commit_rejects_attempt_already_advanced(active_system):
     store,_,_ = active_system
     attempt = store.prepare_attempt("op-1",1)
-    with sqlite3.connect(store.database) as db:
-        db.execute("UPDATE attempts SET status='admitted' WHERE attempt_id=?",(attempt["attempt_id"],))
+    _execute_sql(store.database,"UPDATE attempts SET status='admitted' WHERE attempt_id=?",(attempt["attempt_id"],))
     with pytest.raises(InvalidTransition,match="prepared attempt"):
         store.mark_committed("op-1",1,attempt["attempt_id"],"provider-0001")
 
@@ -277,8 +280,7 @@ def test_commit_rejects_attempt_already_advanced(active_system):
 def test_inconclusive_requires_prepared_attempt(active_system):
     store,_,_ = active_system
     attempt = store.prepare_attempt("op-1",1)
-    with sqlite3.connect(store.database) as db:
-        db.execute("UPDATE attempts SET generation=0 WHERE attempt_id=?",(attempt["attempt_id"],))
+    _execute_sql(store.database,"UPDATE attempts SET generation=0 WHERE attempt_id=?",(attempt["attempt_id"],))
     with pytest.raises(InvalidTransition,match="prepared attempt"):
         store.mark_inconclusive("op-1",1,attempt["attempt_id"],"ambiguous")
 
