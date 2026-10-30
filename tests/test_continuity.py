@@ -3,6 +3,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 import pytest
+from hypothesis import given, settings, strategies as st
 from continuity_conformance import (
     ContinuityService, DeterministicProvider, InvalidTransition, OperationNotFound,
     OperationState, OperationStore, ResponseLost, StaleGeneration,
@@ -415,3 +416,56 @@ def test_provider_failure_evidence_is_bound_and_terminal(active_system):
     assert final["state"] == OperationState.FAILED
     with pytest.raises(InvalidTransition):
         store.transfer("op-1",1)
+
+
+@settings(max_examples=40,deadline=None)
+@given(st.lists(st.sampled_from([
+    "transfer","stale_transfer","prepare","commit","inconclusive",
+    "reconcile_absent","reconcile_pending","reconcile_completed",
+    "reconcile_failed","reconcile_unknown",
+]),min_size=1,max_size=35))
+def test_generated_lifecycle_sequences_preserve_invariants(tmp_path, commands):
+    from continuity_conformance.models import ProviderRecord
+
+    store = OperationStore(tmp_path / "generated.sqlite3")
+    store.create_operation("generated","generated-payload")
+    store.approve("generated")
+    store.activate("generated")
+    generation = 1
+    attempt_id = None
+    previous_version = 1
+
+    for command in commands:
+        current = store.get_operation("generated")
+        try:
+            if command == "transfer":
+                current = store.transfer("generated",generation)
+                generation += 1
+            elif command == "stale_transfer":
+                store.transfer("generated",generation-1)
+            elif command == "prepare":
+                attempt = store.prepare_attempt("generated",generation)
+                attempt_id = attempt["attempt_id"]
+            elif command == "commit" and attempt_id is not None:
+                store.mark_committed("generated",generation,attempt_id,"provider-generated")
+            elif command == "inconclusive" and attempt_id is not None:
+                store.mark_inconclusive("generated",generation,attempt_id,"generated ambiguity")
+            elif command.startswith("reconcile_"):
+                status = command.removeprefix("reconcile_")
+                if status == "absent":
+                    record = None
+                else:
+                    record = ProviderRecord(
+                        "generated","provider-generated" if status != "unknown" else "",
+                        "mystery" if status == "unknown" else status,
+                        "generated-payload",
+                    )
+                current = store.reconcile("generated",generation,record)
+        except (InvalidTransition,StaleGeneration,ValueError,OperationNotFound):
+            pass
+
+        current = store.get_operation("generated")
+        assert current["generation"] == generation
+        assert current["version"] >= previous_version
+        previous_version = current["version"]
+        assert store.verify_event_chain()
