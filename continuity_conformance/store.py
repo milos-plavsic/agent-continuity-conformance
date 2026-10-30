@@ -12,6 +12,7 @@ from typing import Any
 from .errors import InvalidTransition, OperationNotFound, StaleGeneration
 from .models import OperationState, ProviderRecord
 
+
 def _canonical(value: dict[str, Any]) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
