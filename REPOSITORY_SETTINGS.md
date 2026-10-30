@@ -9,7 +9,7 @@ Create a branch ruleset targeting `main` and enable:
 
 - Require a pull request before merging.
 - Require the three test-matrix checks: `Python 3.11`, `Python 3.12`, and
-  `Python 3.13`, and `Python 3.14`.
+  `Python 3.13`, and `Python 3.14`, and `Python 3.15`.
 - Require branches to be up to date before merging, if practical for this solo project.
 - Require conversation resolution.
 - Block force pushes.
