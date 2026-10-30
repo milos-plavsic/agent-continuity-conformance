@@ -37,8 +37,17 @@ jobs:
         run: ruff check .
       - name: Run static type checks
         run: mypy --ignore-missing-imports continuity_conformance
-      - name: Run tests with branch coverage
-        run: python -m pytest --cov=continuity_conformance --cov-branch --cov-report=term-missing
+      - name: Run tests with branch coverage and JSON report
+        run: |
+          mkdir -p test-artifacts
+          python -m pytest --cov=continuity_conformance --cov-branch --cov-report=term-missing --json-report --json-report-file=test-artifacts/pytest-report.json
+      - name: Upload machine-readable test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report-python-${{ matrix.python-version }}
+          path: test-artifacts/pytest-report.json
+          if-no-files-found: warn
       - name: Audit installed dependencies
         run: pip-audit
       - name: Build wheel
