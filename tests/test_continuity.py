@@ -1,12 +1,21 @@
 from __future__ import annotations
+
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
-import pytest
+
 from hypothesis import given, settings, strategies as st
+import pytest
+
 from continuity_conformance import (
-    ContinuityService, DeterministicProvider, InvalidTransition, OperationNotFound,
-    OperationState, OperationStore, ResponseLost, StaleGeneration,
+    ContinuityService,
+    DeterministicProvider,
+    InvalidTransition,
+    OperationNotFound,
+    OperationState,
+    OperationStore,
+    ResponseLost,
+    StaleGeneration,
 )
 
 def activate(store: OperationStore, operation_id: str = "op-1") -> None:
