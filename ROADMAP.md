@@ -33,6 +33,7 @@ Initial automated coverage includes:
 - Stale generation rejected before provider admission.
 - Lost acknowledgement reconciled without duplicate provider effect.
 - Provider completion delayed until after ownership transfer.
+- Lost acknowledgement persisted as INCONCLUSIVE before returning to the caller.
 - Provider unavailability preserved as INCONCLUSIVE.
 - Duplicate provider admission deduplicated by stable key.
 - Process restart and durable state recovery.
