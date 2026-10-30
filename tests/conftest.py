@@ -4,6 +4,7 @@ import pytest
 
 from continuity_conformance import ContinuityService, DeterministicProvider, OperationStore
 
+
 @pytest.fixture
 def system(tmp_path):
     store = OperationStore(tmp_path / "operations.sqlite3")
