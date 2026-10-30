@@ -1,98 +1,118 @@
 # Execution Continuity Conformance
 
-A specification-first project for testing whether distributed services preserve ownership, authorization, execution identity, and verifiable outcomes when work is retried, handed over, interrupted, or resumed.
+A compact reference implementation and adversarial test suite for preserving operation ownership, provider identity, and verifiable outcomes across retries, handovers, interruptions, and delayed remote effects.
 
-The project defines a narrow compatibility contract and an adversarial conformance suite for systems that coordinate long-running operations across changing workers and infrastructure boundaries.
+[![Tests](https://github.com/milos-plavsic/agent-continuity-conformance/actions/workflows/tests.yml/badge.svg)](https://github.com/milos-plavsic/agent-continuity-conformance/actions/workflows/tests.yml)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 
 ## The problem
 
-Distributed systems routinely separate the decision to perform an operation from the component that eventually performs it. During that interval, a process may restart, ownership may change, messages may be redelivered, or a remote provider may return an ambiguous result.
+A distributed operation can cross several independent boundaries. A process may submit a request, lose the acknowledgement, stop running, and be replaced by a successor. The provider may still complete the original request after ownership has transferred.
 
-These conditions create several distinct risks:
+A successor that treats a missing local acknowledgement as proof of provider failure can submit a duplicate operation. A local ownership change can reject new stale requests at a protected boundary, but it cannot recall a request already admitted by a remote provider.
 
-- A former owner continues acting after responsibility has transferred.
-- A retry creates a second external effect.
-- A successor proceeds without sufficient evidence about the predecessor's work.
-- A stale or incomplete record is treated as proof of completion.
-- A request already admitted by a remote provider is incorrectly assumed to be cancellable by local fencing.
-- An unresolved outcome is converted into a false success or failure.
+This project makes that distinction executable and testable.
 
-Ordinary retry tests and duplicate-message tests do not cover every one of these cases. In particular, duplicate delivery is not equivalent to a request from a former owner that was admitted by a provider before handover and only takes effect afterward.
+## What is implemented
 
-## Objective
+The repository includes a runnable Python reference implementation with:
 
-Define and test a small, implementation-neutral contract for safe continuity across ownership changes.
+- A SQLite-backed operation registry and explicit lifecycle states.
+- Monotonically increasing ownership generations.
+- Generation checks before local request preparation.
+- A serialized in-process admission and handover boundary.
+- Stable operation identity across attempts.
+- A deterministic provider simulator with idempotent admission.
+- Separate provider admission and completion events.
+- Recovery after a lost acknowledgement and process restart.
+- Explicit `INCONCLUSIVE` handling when provider status is unavailable.
+- A SHA-256 chained event log with a verifier for accidental or unauthorized event modification.
+- A command-line demonstration of delayed provider completion after ownership transfer.
+- Automated tests and GitHub Actions CI for Python 3.11, 3.12, and 3.13.
 
-The contract focuses on five properties:
+## Quick start
 
-1. **Explicit ownership:** every consequential operation has a well-defined owner and ownership generation.
-2. **Fenced authority:** stale generations cannot newly authorize consequential work at the enforcement boundary.
-3. **Stable operation identity:** retries and redeliveries retain the identity of the original logical operation.
-4. **Evidence-based succession:** a successor reconciles prior work from durable evidence before deciding what may happen next.
-5. **Honest outcomes:** verified, failed, and unresolved outcomes remain distinguishable.
+Requirements: Python 3.11 or newer.
 
-The project is intended to be usable across services, queues, workflow engines, databases, and external providers. It does not prescribe a particular cloud, programming language, database, queue, or orchestration framework.
+```bash
+git clone https://github.com/milos-plavsic/agent-continuity-conformance.git
+cd agent-continuity-conformance
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[test]"
+python -m pytest
+continuity-demo
+```
 
-## Current status
+On Windows PowerShell, activate the environment with `.venv\Scripts\Activate.ps1`.
 
-**Status: Specification and baseline phase**
+The demo should report:
 
-This repository currently contains design documentation and a proposed conformance model. It does not yet claim a completed executable test suite, production implementation, independent certification, or third-party interoperability.
+- Final state: `VERIFIED`
+- Ownership generation: `2`
+- Provider admissions: `1`
+- Provider effects: `1`
+- Event-chain verification: `true`
 
-Planned implementation work is tracked in [ROADMAP.md](ROADMAP.md). Test expectations are defined in [CONFORMANCE.md](CONFORMANCE.md).
+## Core scenario
 
-## Repository guide
+1. Create and approve a logical operation.
+2. Activate ownership generation 1.
+3. Submit a provider request.
+4. Simulate provider admission followed by a lost acknowledgement.
+5. Transfer ownership to generation 2.
+6. Complete the original provider request after the handover.
+7. Reconcile using the original operation identity.
+8. Verify the original effect without submitting a duplicate.
+
+Two related cases are tested separately: a stale generation arriving after handover must be rejected before admission, and provider unavailability must leave the operation `INCONCLUSIVE`.
+
+## Design invariants
+
+1. An operation identifier represents one logical operation, not one delivery attempt.
+2. Ownership generations increase monotonically and are not reused.
+3. A stale generation cannot prepare new work after a handover has taken effect at the local boundary.
+4. A successor reconciles prior work before preparing a potentially duplicative attempt.
+5. Retries retain the same provider idempotency identity.
+6. Provider admission is distinct from provider completion.
+7. A lost response or unavailable status endpoint is not proof of failure.
+8. An unresolved outcome cannot be promoted to `VERIFIED` without new evidence.
+9. Event integrity checks do not establish the factual truth of an event.
+
+## Architecture and project files
 
 | File | Purpose |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, lifecycle, invariants, and trust boundaries |
-| [THREAT_MODEL.md](THREAT_MODEL.md) | Threats, assumptions, attacker capabilities, and mitigations |
-| [CONFORMANCE.md](CONFORMANCE.md) | Normative behaviours and required adversarial scenarios |
-| [PROVIDER_BOUNDARY.md](PROVIDER_BOUNDARY.md) | The limits of local fencing at remote execution boundaries |
-| [COMPATIBILITY.md](COMPATIBILITY.md) | Minimal interoperability contract and mapping guidance |
-| [ROADMAP.md](ROADMAP.md) | Sequenced implementation plan and acceptance gates |
+| [THREAT_MODEL.md](THREAT_MODEL.md) | Threats, assumptions, and mitigations |
+| [CONFORMANCE.md](CONFORMANCE.md) | Proposed requirements and adversarial scenario catalogue |
+| [PROVIDER_BOUNDARY.md](PROVIDER_BOUNDARY.md) | Provider admission, idempotency, and reconciliation |
+| [COMPATIBILITY.md](COMPATIBILITY.md) | Minimal interoperability concepts |
+| [DECISIONS.md](DECISIONS.md) | Implementation decisions and known limitations |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Installation, test, and demonstration instructions |
+| [ROADMAP.md](ROADMAP.md) | Remaining implementation and validation work |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution and change-control process |
-| [SECURITY.md](SECURITY.md) | Vulnerability reporting and security review expectations |
-| [examples/incident-recovery.md](examples/incident-recovery.md) | Worked handover and recovery scenario |
+| [SECURITY.md](SECURITY.md) | Security reporting guidance |
+| [examples/incident-recovery.md](examples/incident-recovery.md) | Worked delayed-request recovery scenario |
 
-## Design principles
+## Current status
 
-- **Small contract, not a universal framework.** Define only the fields and behaviours needed to test continuity.
-- **Enforcement over convention.** A recorded policy decision is not sufficient unless the consequential boundary enforces it.
-- **Evidence over assumption.** A timeout is not proof that a remote operation failed.
-- **At-most-once effect where supported.** Use stable operation identity and provider-side idempotency where available; do not promise this property where the provider cannot support it.
-- **Fail closed on uncertainty.** Preserve unresolved state and require reconciliation instead of inventing a terminal result.
-- **Portable evidence.** Evidence should be inspectable and verifiable without requiring access to the original runtime.
-- **Adversarial by default.** Tests should deliberately reorder, delay, duplicate, interrupt, and replay events.
+**Status: Working reference implementation; conformance suite in progress.**
 
-## Non-goals
+The implementation and initial automated tests are present. The conformance catalogue contains additional scenarios that are not yet all implemented. CI results should be checked on the Actions page before relying on a particular revision.
 
-This project is not intended to:
+This is a reference implementation, not a production-ready distributed coordination service or an independent certification. The provider is simulated; no real provider adapter is included.
 
-- Replace an orchestration platform, message broker, database, or workflow engine.
-- Define a general-purpose identity system or authorization language.
-- Guarantee cancellation of work already admitted by a remote provider.
-- Claim exactly-once execution across arbitrary external systems.
-- Treat a successful local test run as proof of production security.
-- Define a broad standard for every form of distributed process recovery.
+## Explicit limitations
 
-## Terminology
-
-- **Operation:** one logical unit of consequential work, identified independently of individual delivery attempts.
-- **Owner:** the current authority responsible for coordinating an operation.
-- **Generation:** a monotonically increasing ownership epoch used to distinguish successive owners.
-- **Fence:** an enforcement check that rejects stale generations at a protected boundary.
-- **Provider:** an external system that admits or performs a consequential operation.
-- **Evidence:** durable records used to establish what was authorized, attempted, admitted, and observed.
-- **Reconciliation:** the process of resolving prior attempts before a successor proceeds.
-- **Unresolved outcome:** a state in which available evidence cannot establish success or failure.
-
-## Status and claims
-
-All requirements in this repository are design proposals until backed by executable tests and documented results. A conformance report must state its implementation, environment, test version, provider assumptions, passed cases, failed cases, skipped cases, and limitations.
-
-A test suite can demonstrate that a particular implementation satisfies defined cases under stated assumptions. It cannot by itself establish that every deployment, identity configuration, or external provider behaves the same way.
+- The per-operation lock coordinates admission and handover within one Python process only. Multiple service processes or hosts require a shared linearizable admission gate or a trusted gateway that enforces fencing.
+- SQLite is used for durable local state. It is not presented as a distributed lock or consensus system.
+- The fake provider supports stable idempotency keys and status lookup. Real provider semantics, key-retention windows, and cancellation guarantees must be verified independently.
+- The event hash chain detects modification relative to the retained chain. It is not a digital signature, does not authenticate event issuers, and can be recomputed by an attacker with full database control.
+- The reference test suite does not prove correctness for untested providers, deployment configurations, or failure modes.
+- Exactly-once effects cannot be promised for arbitrary providers that lack suitable idempotency and authoritative status facilities.
 
 ## License
 
-No open-source license has been selected yet. Unless and until a license is added, no permission to reuse, modify, or distribute this repository is granted beyond rights provided by applicable law.
+Distributed under the MIT License. See [LICENSE](LICENSE).
