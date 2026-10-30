@@ -380,3 +380,38 @@ def test_transfer_from_prepared_state_requires_successor_reconciliation(active_s
     reconciled = service.reconcile("op-1",2)
     assert reconciled["state"] == OperationState.COMMITTED
     assert len(store.get_attempts("op-1")) == 1
+
+
+def test_attempt_from_another_operation_cannot_be_committed(system):
+    store,_,_ = system
+    activate(store,"op-a")
+    activate(store,"op-b")
+    attempt_a = store.prepare_attempt("op-a",1)
+    attempt_b = store.prepare_attempt("op-b",1)
+    with pytest.raises(OperationNotFound):
+        store.mark_committed("op-a",1,attempt_b["attempt_id"],"provider-0001")
+    assert store.get_operation("op-a")["state"] == OperationState.PREPARED
+    assert store.get_operation("op-b")["state"] == OperationState.PREPARED
+    assert attempt_a["provider_key"] != attempt_b["provider_key"]
+
+
+def test_malformed_unhashable_provider_status_is_inconclusive(active_system):
+    from continuity_conformance.models import ProviderRecord
+
+    store,_,service = active_system
+    service.submit("op-1",1)
+    malformed = ProviderRecord("op-1","provider-0001",[],"test-payload")
+    final = store.reconcile("op-1",1,malformed)
+    assert final["state"] == OperationState.INCONCLUSIVE
+
+
+def test_provider_failure_evidence_is_bound_and_terminal(active_system):
+    from continuity_conformance.models import ProviderRecord
+
+    store,_,service = active_system
+    service.submit("op-1",1)
+    failed = ProviderRecord("op-1","provider-0001","failed","test-payload")
+    final = store.reconcile("op-1",1,failed)
+    assert final["state"] == OperationState.FAILED
+    with pytest.raises(InvalidTransition):
+        store.transfer("op-1",1)
