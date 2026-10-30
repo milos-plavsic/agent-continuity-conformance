@@ -1,14 +1,19 @@
 """SQLite operation registry with generation checks and a chained event log."""
 from __future__ import annotations
+
 import hashlib
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
 from .errors import InvalidTransition, OperationNotFound, StaleGeneration
 from .models import OperationState, ProviderRecord
+
 
 def _canonical(value: dict[str, Any]) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -22,12 +27,18 @@ class OperationStore:
         Path(self.database).parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Yield a transactional connection and always close its file descriptor."""
         connection = sqlite3.connect(self.database, timeout=10, isolation_level="DEFERRED")
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 10000")
-        return connection
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA busy_timeout = 10000")
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def _initialize(self) -> None:
         with self._connect() as db:
@@ -55,7 +66,7 @@ class OperationStore:
                       event_type: str, details: dict[str, Any]) -> None:
         previous = db.execute("SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone()
         previous_hash = "0" * 64 if previous is None else str(previous["event_hash"])
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
         body = {"operation_id": operation_id, "generation": generation, "event_type": event_type,
                 "details": details, "created_at": created_at, "previous_hash": previous_hash}
         digest = hashlib.sha256(_canonical(body).encode()).hexdigest()
@@ -135,12 +146,23 @@ class OperationStore:
                                  (attempt_id,operation_id)).fetchone()
             if attempt is None:
                 raise OperationNotFound(f"Attempt {attempt_id!r} does not exist")
-            changed = db.execute("UPDATE operations SET state=?,provider_request_id=?,version=version+1 WHERE operation_id=? AND generation=?",
-                                 (OperationState.COMMITTED.value,request_id,operation_id,generation)).rowcount
+            if row["state"] != OperationState.PREPARED.value:
+                raise InvalidTransition(f"Cannot commit an attempt in {row['state']} state")
+            if attempt["generation"] != generation or attempt["status"] != "prepared":
+                raise InvalidTransition("Only a prepared attempt from the current generation can be committed")
+            if attempt["provider_key"] != row["provider_key"]:
+                raise InvalidTransition("Attempt provider identity does not match the operation")
+            if not isinstance(request_id, str) or not request_id.strip():
+                raise ValueError("request_id must be a non-empty string")
+            changed = db.execute("UPDATE operations SET state=?,provider_request_id=?,version=version+1 WHERE operation_id=? AND generation=? AND state=?",
+                                 (OperationState.COMMITTED.value,request_id,operation_id,generation,
+                                  OperationState.PREPARED.value)).rowcount
             if changed != 1:
-                raise StaleGeneration("Ownership changed before the admission record could be committed")
-            db.execute("UPDATE attempts SET provider_request_id=?,status='admitted' WHERE attempt_id=?",
-                       (request_id,attempt_id))
+                raise StaleGeneration("Ownership or lifecycle state changed before admission could be committed")
+            changed = db.execute("UPDATE attempts SET provider_request_id=?,status='admitted' WHERE attempt_id=? AND operation_id=? AND generation=? AND status='prepared'",
+                                 (request_id,attempt_id,operation_id,generation)).rowcount
+            if changed != 1:
+                raise InvalidTransition("Attempt changed before provider admission could be committed")
             self._append_event(db,operation_id,generation,"PROVIDER_ADMITTED",
                                {"attempt_id":attempt_id,"provider_request_id":request_id})
         return self.get_operation(operation_id)
@@ -158,6 +180,10 @@ class OperationStore:
                                  (attempt_id,operation_id)).fetchone()
             if attempt is None:
                 raise OperationNotFound(f"Attempt {attempt_id!r} does not exist")
+            if attempt["generation"] != generation or attempt["status"] != "prepared":
+                raise InvalidTransition("Only a prepared attempt from the current generation can become inconclusive")
+            if attempt["provider_key"] != row["provider_key"]:
+                raise InvalidTransition("Attempt provider identity does not match the operation")
             changed = db.execute("UPDATE operations SET state=?,version=version+1 WHERE operation_id=? AND generation=? AND state=?",
                                  (OperationState.INCONCLUSIVE.value,operation_id,generation,
                                   OperationState.PREPARED.value)).rowcount
@@ -173,8 +199,15 @@ class OperationStore:
             db.execute("BEGIN IMMEDIATE")
             row = self._require(db,operation_id)
             self._check_generation(row,generation)
-            if row["state"] in {OperationState.VERIFIED.value,OperationState.FAILED.value}:
-                raise InvalidTransition(f"Cannot transfer a terminal operation in {row['state']}")
+            transferable = {
+                OperationState.FENCED.value,
+                OperationState.PREPARED.value,
+                OperationState.COMMITTED.value,
+                OperationState.RECONCILED.value,
+                OperationState.INCONCLUSIVE.value,
+            }
+            if row["state"] not in transferable:
+                raise InvalidTransition(f"Cannot transfer an operation in {row['state']} state")
             next_generation = generation + 1
             changed = db.execute("UPDATE operations SET generation=?,version=version+1 WHERE operation_id=? AND generation=?",
                                  (next_generation,operation_id,generation)).rowcount
@@ -186,27 +219,59 @@ class OperationStore:
 
     def reconcile(self, operation_id: str, generation: int,
                   record: ProviderRecord | None) -> dict[str, Any]:
+        """Apply provider evidence only after binding it to the logical operation.
+
+        None means the provider supplied an authoritative not-found result.
+        A record with an unknown status is not trusted as positive evidence and
+        leaves the operation inconclusive.
+        """
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = self._require(db,operation_id)
             self._check_generation(row,generation)
-            if row["state"] in {OperationState.VERIFIED.value,OperationState.FAILED.value}:
-                raise InvalidTransition(f"Cannot reconcile a terminal operation in {row['state']} state")
+            reconcilable = {
+                OperationState.FENCED.value,
+                OperationState.PREPARED.value,
+                OperationState.COMMITTED.value,
+                OperationState.RECONCILED.value,
+                OperationState.INCONCLUSIVE.value,
+            }
+            if row["state"] not in reconcilable:
+                raise InvalidTransition(f"Cannot reconcile an operation in {row['state']} state")
+
             if record is None:
                 state,status,request_id = OperationState.RECONCILED,"not_found",None
-            elif record.status == "completed":
-                state,status,request_id = OperationState.VERIFIED,"completed",record.request_id
-            elif record.status == "pending":
-                state,status,request_id = OperationState.COMMITTED,"admitted",record.request_id
-            elif record.status == "failed":
-                state,status,request_id = OperationState.FAILED,"failed",record.request_id
+            elif isinstance(getattr(record, "status", None), str) and record.status in {"pending", "completed", "failed"}:
+                if getattr(record, "idempotency_key", None) != row["provider_key"]:
+                    raise ValueError("Provider status belongs to a different operation identity")
+                if getattr(record, "payload", None) != row["payload"]:
+                    raise ValueError("Provider status payload does not match the operation")
+                request_id = getattr(record, "request_id", None)
+                if not isinstance(request_id, str) or not request_id.strip():
+                    raise ValueError("Provider status is missing a valid request identity")
+                if row["provider_request_id"] and row["provider_request_id"] != request_id:
+                    raise ValueError("Provider status conflicts with the previously recorded request identity")
+                if record.status == "completed":
+                    state,status = OperationState.VERIFIED,"completed"
+                elif record.status == "pending":
+                    state,status = OperationState.COMMITTED,"admitted"
+                else:
+                    state,status = OperationState.FAILED,"failed"
             else:
-                state,status,request_id = OperationState.INCONCLUSIVE,"unknown",getattr(record,"request_id",None)
-            db.execute("""UPDATE operations SET state=?,provider_request_id=COALESCE(?,provider_request_id),
-                       version=version+1 WHERE operation_id=?""",(state.value,request_id,operation_id))
-            db.execute("""UPDATE attempts SET status=?,provider_request_id=COALESCE(?,provider_request_id)
-                       WHERE operation_id=? AND provider_key=?""",
-                       (status,request_id,operation_id,row["provider_key"]))
+                state,status,request_id = OperationState.INCONCLUSIVE,"unknown",None
+
+            changed = db.execute(
+                """UPDATE operations SET state=?,provider_request_id=COALESCE(?,provider_request_id),
+                   version=version+1 WHERE operation_id=? AND generation=? AND state IN (?,?,?,?,?)""",
+                (state.value,request_id,operation_id,generation,*sorted(reconcilable)),
+            ).rowcount
+            if changed != 1:
+                raise StaleGeneration("Ownership or lifecycle state changed during reconciliation")
+            db.execute(
+                """UPDATE attempts SET status=?,provider_request_id=COALESCE(?,provider_request_id)
+                   WHERE operation_id=? AND provider_key=?""",
+                (status,request_id,operation_id,row["provider_key"]),
+            )
             self._append_event(db,operation_id,generation,"RECONCILIATION_COMPLETED",
                                {"provider_status":status,"provider_request_id":request_id,
                                 "resulting_state":state.value})

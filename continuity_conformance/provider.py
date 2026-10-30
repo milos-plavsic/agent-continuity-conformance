@@ -1,8 +1,11 @@
 """Deterministic provider simulator with explicit admission and completion."""
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 from .errors import ProviderUnavailable
 from .models import ProviderRecord
+
 
 @dataclass(slots=True)
 class _StoredRequest:

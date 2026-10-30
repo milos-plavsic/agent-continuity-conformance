@@ -39,4 +39,4 @@ Coordinated disclosure is preferred. The timing and content of any public adviso
 
 ## Current implementation status
 
-This repository currently contains design documentation. There is no production implementation or security certification represented by this policy.
+This repository contains a working reference implementation and automated checks. GitHub Actions runs CodeQL analysis, full-history secret scanning, dependency auditing, and weekly dependency update checks. These controls do not constitute a production security review or certification. The implementation remains a local reference system with a simulated provider and documented multi-process and multi-host limitations.

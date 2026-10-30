@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+
 class OperationState(StrEnum):
     PROPOSED = "PROPOSED"
     APPROVED = "APPROVED"

@@ -28,7 +28,7 @@ Known limitation: the per-operation lock is process-local. It does not provide c
 
 ## Phase 2: Adversarial conformance suite
 
-Initial automated coverage includes:
+The expanded automated suite currently contains 46 tests and includes 40 generated lifecycle-sequence examples per property-based test invocation. Coverage includes:
 
 - Stale generation rejected before provider admission.
 - Lost acknowledgement reconciled without duplicate provider effect.
@@ -40,16 +40,19 @@ Initial automated coverage includes:
 - Monotonic generation and invalid transition checks.
 - Event modification and deletion detection.
 - Independent operation identity scopes.
-- Concurrent handover attempts with exactly one successful generation advance.
+- Concurrent handover attempts with exactly one successful generation advance, including separate operating-system processes.
+- Rejection of cross-operation provider evidence, payload substitution, malformed request identities, conflicting request identities, and unknown provider statuses.
+- Recovery after provider admission when local persistence fails before the acknowledgement is recorded.
+- Generated lifecycle command sequences that preserve generation, version, and event-chain invariants.
+- Machine-readable pytest reports and branch-coverage reporting.
+- Ruff, mypy, pip-audit, wheel-build and clean-install checks, CodeQL, full-history secret scanning, and Dependabot automation.
 - Malformed event data rejected by the integrity verifier.
 - Installed command-line entry point exercised in CI.
 
 Remaining work:
 
-1. Add a provider simulator with conflicting and malformed status responses.
-2. Add explicit replay and cross-operation evidence substitution tests.
-3. Add property-based transition testing if it materially improves coverage.
-4. Publish a machine-readable test result format.
+1. Publish versioned, portable signed evidence with an offline verifier (Phase 3).
+2. Conduct an independent interoperability exercise (Phase 4).
 
 ## Phase 3: Portable evidence package
 
