@@ -230,7 +230,7 @@ class OperationStore:
 
             if record is None:
                 state,status,request_id = OperationState.RECONCILED,"not_found",None
-            elif getattr(record, "status", None) in {"pending", "completed", "failed"}:
+            elif isinstance(getattr(record, "status", None), str) and record.status in {"pending", "completed", "failed"}:
                 if getattr(record, "idempotency_key", None) != row["provider_key"]:
                     raise ValueError("Provider status belongs to a different operation identity")
                 if getattr(record, "payload", None) != row["payload"]:
