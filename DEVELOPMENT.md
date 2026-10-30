@@ -50,9 +50,15 @@ The per-operation lock coordinates handover and admission within one Python proc
 A multi-process deployment requires a shared linearizable admission gate or fencing at a
 trusted provider gateway. SQLite is a durable local registry, not a distributed lock.
 
-The simulated provider supports idempotency and status lookup. Real providers differ.
-The hash chain detects changes relative to the retained chain but is not a signature,
-does not authenticate event issuers, and cannot resist an attacker who can rewrite the
-entire database and recompute every hash.
+The simulated provider is in-memory and supports idempotency and immediately authoritative
+status lookup. The restart test retains this provider instance while recreating the local
+service and registry connection. A real provider adapter must document whether a
+"not found" response is authoritative or merely eventually consistent. If absence cannot
+be established authoritatively, the safe result is INCONCLUSIVE, not a retry.
+
+The hash chain detects modification within the retained sequence but is not a signature,
+does not authenticate event issuers, cannot detect removal of a trailing suffix without
+an external checkpoint, and cannot resist an attacker who can rewrite the entire database
+and recompute every hash.
 
 The tests are a conformance starting point, not a security certification.
