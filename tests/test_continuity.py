@@ -229,3 +229,153 @@ def test_concurrent_handover_has_one_winner(active_system):
         outcomes = list(pool.map(lambda _: handover(), range(2)))
     assert sorted(outcomes) == ["stale","transferred"]
     assert store.get_operation("op-1")["generation"] == 2
+
+
+def test_transfer_rejected_before_initial_activation(system):
+    store,_,_ = system
+    store.create_operation("unstarted","payload")
+    with pytest.raises(InvalidTransition):
+        store.transfer("unstarted",0)
+    store.approve("unstarted")
+    with pytest.raises(InvalidTransition):
+        store.transfer("unstarted",0)
+    assert store.get_operation("unstarted")["generation"] == 0
+    assert store.get_operation("unstarted")["state"] == OperationState.APPROVED
+
+
+def test_commit_requires_prepared_current_generation_attempt(active_system):
+    store,_,_ = active_system
+    attempt = store.prepare_attempt("op-1",1)
+    with pytest.raises(ValueError,match="non-empty"):
+        store.mark_committed("op-1",1,attempt["attempt_id"]," ")
+    assert store.get_operation("op-1")["state"] == OperationState.PREPARED
+
+
+def test_commit_rejects_attempt_already_advanced(active_system):
+    store,_,_ = active_system
+    attempt = store.prepare_attempt("op-1",1)
+    with sqlite3.connect(store.database) as db:
+        db.execute("UPDATE attempts SET status='admitted' WHERE attempt_id=?",(attempt["attempt_id"],))
+    with pytest.raises(InvalidTransition,match="prepared attempt"):
+        store.mark_committed("op-1",1,attempt["attempt_id"],"provider-0001")
+
+
+def test_inconclusive_requires_prepared_attempt(active_system):
+    store,_,_ = active_system
+    attempt = store.prepare_attempt("op-1",1)
+    with sqlite3.connect(store.database) as db:
+        db.execute("UPDATE attempts SET generation=0 WHERE attempt_id=?",(attempt["attempt_id"],))
+    with pytest.raises(InvalidTransition,match="prepared attempt"):
+        store.mark_inconclusive("op-1",1,attempt["attempt_id"],"ambiguous")
+
+
+def test_reconciliation_rejects_cross_operation_evidence(active_system):
+    from continuity_conformance.models import ProviderRecord
+
+    store,_,service = active_system
+    service.submit("op-1",1)
+    forged = ProviderRecord("another-operation","provider-9999","completed","test-payload")
+    with pytest.raises(ValueError,match="different operation identity"):
+        store.reconcile("op-1",1,forged)
+    assert store.get_operation("op-1")["state"] == OperationState.COMMITTED
+
+
+def test_reconciliation_rejects_payload_substitution(active_system):
+    from continuity_conformance.models import ProviderRecord
+
+    store,_,service = active_system
+    service.submit("op-1",1)
+    forged = ProviderRecord("op-1","provider-0001","completed","different-payload")
+    with pytest.raises(ValueError,match="payload"):
+        store.reconcile("op-1",1,forged)
+
+
+def test_reconciliation_rejects_missing_provider_request_identity(active_system):
+    from continuity_conformance.models import ProviderRecord
+
+    store,_,service = active_system
+    service.submit("op-1",1)
+    malformed = ProviderRecord("op-1"," ","completed","test-payload")
+    with pytest.raises(ValueError,match="request identity"):
+        store.reconcile("op-1",1,malformed)
+
+
+def test_reconciliation_rejects_conflicting_request_identity(active_system):
+    from continuity_conformance.models import ProviderRecord
+
+    store,_,service = active_system
+    service.submit("op-1",1)
+    conflicting = ProviderRecord("op-1","provider-other","completed","test-payload")
+    with pytest.raises(ValueError,match="conflicts"):
+        store.reconcile("op-1",1,conflicting)
+
+
+def test_unknown_provider_status_remains_inconclusive(active_system):
+    from continuity_conformance.models import ProviderRecord
+
+    store,_,service = active_system
+    service.submit("op-1",1)
+    unknown = ProviderRecord("op-1","provider-0001","mystery","test-payload")
+    final = store.reconcile("op-1",1,unknown)
+    assert final["state"] == OperationState.INCONCLUSIVE
+
+
+def test_provider_admission_then_local_commit_crash_is_recoverable(active_system, monkeypatch):
+    store,provider,service = active_system
+
+    def crash_before_commit(*args, **kwargs):
+        raise RuntimeError("simulated process failure after provider admission")
+
+    monkeypatch.setattr(store,"mark_committed",crash_before_commit)
+    with pytest.raises(RuntimeError,match="simulated process failure"):
+        service.submit("op-1",1)
+    assert store.get_operation("op-1")["state"] == OperationState.PREPARED
+    assert provider.admission_count == 1
+
+    successor = ContinuityService(store,provider)
+    successor.handover("op-1",1)
+    provider.complete("op-1")
+    final = successor.reconcile("op-1",2)
+    assert final["state"] == OperationState.VERIFIED
+    assert provider.admission_count == 1
+    assert provider.effect_count == 1
+
+
+def _transfer_in_separate_process(database: str, barrier) -> str:
+    from continuity_conformance import OperationStore, StaleGeneration
+
+    store = OperationStore(database)
+    barrier.wait(timeout=15)
+    try:
+        store.transfer("op-1",1)
+        return "transferred"
+    except StaleGeneration:
+        return "stale"
+
+
+def test_concurrent_handover_across_processes_has_one_winner(tmp_path):
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+
+    database = str(tmp_path / "multi-process.sqlite3")
+    store = OperationStore(database)
+    activate(store)
+    context = multiprocessing.get_context("spawn")
+    barrier = context.Barrier(2)
+    with ProcessPoolExecutor(max_workers=2,mp_context=context) as pool:
+        futures = [pool.submit(_transfer_in_separate_process,database,barrier) for _ in range(2)]
+        outcomes = [future.result(timeout=30) for future in futures]
+    assert sorted(outcomes) == ["stale","transferred"]
+    assert OperationStore(database).get_operation("op-1")["generation"] == 2
+
+
+def test_transfer_from_prepared_state_requires_successor_reconciliation(active_system):
+    store,provider,service = active_system
+    attempt = store.prepare_attempt("op-1",1)
+    transferred = service.handover("op-1",1)
+    assert transferred["state"] == OperationState.PREPARED
+    assert transferred["generation"] == 2
+    provider.admit(attempt["provider_key"],attempt["payload"])
+    reconciled = service.reconcile("op-1",2)
+    assert reconciled["state"] == OperationState.COMMITTED
+    assert len(store.get_attempts("op-1")) == 1
