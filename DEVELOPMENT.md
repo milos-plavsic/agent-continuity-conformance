@@ -15,7 +15,7 @@ git clone https://github.com/milos-plavsic/agent-continuity-conformance.git
 cd agent-continuity-conformance
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip "setuptools>=84.1.0"
 python -m pip install -e ".[test]"
 ```
 
