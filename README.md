@@ -13,6 +13,10 @@ A successor that treats a missing local acknowledgement as proof of provider fai
 
 This project makes that distinction executable and testable.
 
+## Scope
+
+This is model-agnostic software reliability tooling for coordinating logical operations and reconciling external side effects. It does not train or evaluate machine-learning models, manage model weights or datasets, or serve model inference. The included provider is a deterministic test double, and the examples and tests use synthetic data rather than real customer or personal data.
+
 ## What is implemented
 
 The repository includes a runnable Python reference implementation with:
@@ -91,10 +95,10 @@ Two related cases are tested separately: a stale generation arriving after hando
 | [COMPATIBILITY.md](COMPATIBILITY.md) | Minimal interoperability concepts |
 | [DECISIONS.md](DECISIONS.md) | Implementation decisions and known limitations |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Installation, test, and demonstration instructions |
+| [CI.md](CI.md) | Automated quality, compatibility, and security checks |
 | [ROADMAP.md](ROADMAP.md) | Remaining implementation and validation work |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution and change-control process |
 | [SECURITY.md](SECURITY.md) | Security reporting guidance |
-| [REPOSITORY_SETTINGS.md](REPOSITORY_SETTINGS.md) | Recommended GitHub branch protection and security settings |
 | [examples/incident-recovery.md](examples/incident-recovery.md) | Worked delayed-request recovery scenario |
 
 ## Current status
