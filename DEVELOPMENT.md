@@ -27,7 +27,7 @@ On Windows PowerShell, activate with `.venv\\Scripts\\Activate.ps1`.
 ruff check .
 mypy --ignore-missing-imports continuity_conformance
 python -m pytest --cov=continuity_conformance --cov-branch --cov-report=term-missing --json-report --json-report-file=pytest-report.json
-pip-audit
+pip-audit --skip-editable
 python -m build --wheel
 ```
 
