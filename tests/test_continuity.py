@@ -481,3 +481,17 @@ def test_generated_lifecycle_sequences_preserve_invariants(tmp_path, commands):
         assert current["version"] >= previous_version
         previous_version = current["version"]
         assert store.verify_event_chain()
+
+
+def test_stale_pending_evidence_cannot_regress_verified_operation(active_system):
+    store,provider,service = active_system
+    service.submit("op-1",1)
+    pending_evidence = provider.lookup("op-1")
+    assert pending_evidence is not None
+    store.reconcile("op-1",1,pending_evidence)
+    provider.complete("op-1")
+    verified = service.reconcile("op-1",1)
+    assert verified["state"] == OperationState.VERIFIED
+    with pytest.raises(InvalidTransition):
+        store.reconcile("op-1",1,pending_evidence)
+    assert store.get_operation("op-1")["state"] == OperationState.VERIFIED
