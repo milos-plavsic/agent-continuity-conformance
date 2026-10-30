@@ -4,6 +4,7 @@ from __future__ import annotations
 import threading
 
 from .errors import ProviderUnavailable, ResponseLost
+from .models import ProviderRecord
 from .provider import DeterministicProvider
 from .store import OperationStore
 
@@ -50,9 +51,6 @@ class ContinuityService:
             try:
                 record = self.provider.lookup(operation_id)
             except ProviderUnavailable:
-                record = _UnknownProviderRecord()
+                record = ProviderRecord("", "", "unknown", "")
             return self.store.reconcile(operation_id,generation,record)
 
-class _UnknownProviderRecord:
-    status = "unknown"
-    request_id = None
