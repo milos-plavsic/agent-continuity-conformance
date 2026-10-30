@@ -361,10 +361,11 @@ def test_concurrent_handover_across_processes_has_one_winner(tmp_path):
     store = OperationStore(database)
     activate(store)
     context = multiprocessing.get_context("spawn")
-    barrier = context.Barrier(2)
-    with ProcessPoolExecutor(max_workers=2,mp_context=context) as pool:
-        futures = [pool.submit(_transfer_in_separate_process,database,barrier) for _ in range(2)]
-        outcomes = [future.result(timeout=30) for future in futures]
+    with context.Manager() as manager:
+        barrier = manager.Barrier(2)
+        with ProcessPoolExecutor(max_workers=2,mp_context=context) as pool:
+            futures = [pool.submit(_transfer_in_separate_process,database,barrier) for _ in range(2)]
+            outcomes = [future.result(timeout=30) for future in futures]
     assert sorted(outcomes) == ["stale","transferred"]
     assert OperationStore(database).get_operation("op-1")["generation"] == 2
 
