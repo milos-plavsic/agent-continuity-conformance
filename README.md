@@ -25,7 +25,7 @@ The repository includes a runnable Python reference implementation with:
 - A deterministic provider simulator with idempotent admission.
 - Separate provider admission and completion events.
 - Recovery after a lost acknowledgement and process restart.
-- Explicit `INCONCLUSIVE` handling when provider status is unavailable.
+- Durable `INCONCLUSIVE` state when a provider acknowledgement is lost or status is unavailable.
 - A SHA-256 chained event log with a verifier for accidental or unauthorized event modification.
 - A command-line demonstration of delayed provider completion after ownership transfer.
 - Automated tests and GitHub Actions CI for Python 3.11, 3.12, and 3.13.
