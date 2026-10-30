@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 from continuity_conformance import ContinuityService, DeterministicProvider, OperationStore
 
 @pytest.fixture
