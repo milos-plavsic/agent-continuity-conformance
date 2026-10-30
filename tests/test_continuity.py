@@ -15,6 +15,7 @@ def test_happy_path_reaches_verified(active_system):
     store,provider,service = active_system
     submitted = service.submit("op-1",1)
     assert submitted["provider_status"] == "pending"
+    assert provider.lookup("op-1").payload == "test-payload"
     provider.complete("op-1")
     final = service.reconcile("op-1",1)
     assert final["state"] == OperationState.VERIFIED
@@ -196,3 +197,17 @@ def test_same_operation_id_cannot_be_created_twice(system):
     store.create_operation("duplicate","payload")
     with pytest.raises(sqlite3.IntegrityError):
         store.create_operation("duplicate","payload")
+
+def test_second_service_instance_observes_fenced_generation(active_system):
+    store,provider,service = active_system
+    second_service = ContinuityService(store,provider)
+    service.handover("op-1",1)
+    with pytest.raises(StaleGeneration):
+        second_service.submit("op-1",1)
+    assert provider.admission_count == 0
+
+def test_hash_chain_returns_false_for_malformed_event_json(active_system):
+    store,_,_ = active_system
+    with sqlite3.connect(store.database) as db:
+        db.execute("UPDATE events SET details_json=? WHERE sequence=1",("{",))
+    assert store.verify_event_chain() is False
