@@ -5,8 +5,9 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
-from hypothesis import given, settings, strategies as st
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from continuity_conformance import (
     ContinuityService,
@@ -18,6 +19,7 @@ from continuity_conformance import (
     ResponseLost,
     StaleGeneration,
 )
+
 
 def activate(store: OperationStore, operation_id: str = "op-1") -> None:
     store.create_operation(operation_id,"test-payload")
