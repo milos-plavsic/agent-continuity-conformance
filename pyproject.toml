@@ -13,7 +13,7 @@ license = { text = "MIT" }
 classifiers = ["Development Status :: 3 - Alpha", "License :: OSI Approved :: MIT License", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Programming Language :: Python :: 3.13", "Topic :: Software Development :: Testing", "Topic :: System :: Distributed Computing"]
 
 [project.optional-dependencies]
-test = ["pytest>=8.0,<9.0"]
+test = ["pytest>=8.0,<9.0", "pytest-cov>=6.0,<8.0", "ruff>=0.14,<1.0", "mypy>=1.13,<2.0", "build>=1.0,<2.0", "pip-audit>=2.0,<3.0"]
 
 [project.scripts]
 continuity-demo = "continuity_conformance.demo:main"
