@@ -100,7 +100,7 @@ Two related cases are tested separately: a stale generation arriving after hando
 
 **Status: Working reference implementation; conformance suite in progress.**
 
-The implementation and initial automated tests are present. The conformance catalogue contains additional scenarios that are not yet all implemented. CI results should be checked on the Actions page before relying on a particular revision.
+The current automated suite contains 28 tests and has passed the GitHub Actions matrix on Python 3.11, 3.12, and 3.13. The broader conformance catalogue contains additional scenarios that are not yet implemented.
 
 This is a reference implementation, not a production-ready distributed coordination service or an independent certification. The provider is simulated; no real provider adapter is included.
 
@@ -109,7 +109,7 @@ This is a reference implementation, not a production-ready distributed coordinat
 - The per-operation lock coordinates admission and handover within one Python process only. Multiple service processes or hosts require a shared linearizable admission gate or a trusted gateway that enforces fencing.
 - SQLite is used for durable local state. It is not presented as a distributed lock or consensus system.
 - The fake provider supports stable idempotency keys and status lookup. Real provider semantics, key-retention windows, and cancellation guarantees must be verified independently.
-- The event hash chain detects modification relative to the retained chain. It is not a digital signature, does not authenticate event issuers, and can be recomputed by an attacker with full database control.
+- The event hash chain detects modification within the retained sequence. It is not a digital signature, does not authenticate event issuers, cannot detect removal of a trailing suffix without an external checkpoint, and can be recomputed by an attacker with full database control.
 - The reference test suite does not prove correctness for untested providers, deployment configurations, or failure modes.
 - Exactly-once effects cannot be promised for arbitrary providers that lack suitable idempotency and authoritative status facilities.
 
