@@ -4,6 +4,10 @@
 
 This is a proposed specification. It is not yet a certification standard.
 
+The current reference package implements a subset of these requirements. The test suite is
+evidence about that reference package only; it does not establish conformance of external
+implementations or production deployments.
+
 The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** express requirement strength for implementations claiming alignment with this specification.
 
 A conformance report must identify the exact implementation and version tested. Passing this suite does not establish security outside the tested environment and assumptions.
