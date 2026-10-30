@@ -24,7 +24,7 @@ class ContinuityService:
     def submit(self, operation_id: str, generation: int, *, lose_response: bool = False) -> dict[str,str]:
         with self._lock_for(operation_id):
             attempt = self.store.prepare_attempt(operation_id,generation)
-            record = self.provider.admit(attempt["provider_key"],f"operation:{operation_id}")
+            record = self.provider.admit(attempt["provider_key"],attempt["payload"])
             if lose_response:
                 raise ResponseLost("Provider admitted the request; acknowledgement was lost")
             self.store.mark_committed(operation_id,generation,attempt["attempt_id"],record.request_id)
