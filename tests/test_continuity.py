@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
-import uuid
+import tempfile
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from continuity_conformance import (
@@ -430,16 +431,10 @@ def test_provider_failure_evidence_is_bound_and_terminal(active_system):
         store.transfer("op-1",1)
 
 
-@settings(max_examples=40,deadline=None,suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(st.lists(st.sampled_from([
-    "transfer","stale_transfer","prepare","commit","inconclusive",
-    "reconcile_absent","reconcile_pending","reconcile_completed",
-    "reconcile_failed","reconcile_unknown",
-]),min_size=1,max_size=35))
-def test_generated_lifecycle_sequences_preserve_invariants(tmp_path, commands):
+def _exercise_generated_lifecycle_sequence(commands, database: Path) -> None:
     from continuity_conformance.models import ProviderRecord
 
-    store = OperationStore(tmp_path / f"generated-{uuid.uuid4().hex}.sqlite3")
+    store = OperationStore(database)
     store.create_operation("generated","generated-payload")
     store.approve("generated")
     store.activate("generated")
@@ -448,10 +443,9 @@ def test_generated_lifecycle_sequences_preserve_invariants(tmp_path, commands):
     previous_version = 1
 
     for command in commands:
-        current = store.get_operation("generated")
         try:
             if command == "transfer":
-                current = store.transfer("generated",generation)
+                store.transfer("generated",generation)
                 generation += 1
             elif command == "stale_transfer":
                 store.transfer("generated",generation-1)
@@ -472,7 +466,7 @@ def test_generated_lifecycle_sequences_preserve_invariants(tmp_path, commands):
                         "mystery" if status == "unknown" else status,
                         "generated-payload",
                     )
-                current = store.reconcile("generated",generation,record)
+                store.reconcile("generated",generation,record)
         except (InvalidTransition,StaleGeneration,ValueError,OperationNotFound):
             pass
 
@@ -481,6 +475,17 @@ def test_generated_lifecycle_sequences_preserve_invariants(tmp_path, commands):
         assert current["version"] >= previous_version
         previous_version = current["version"]
         assert store.verify_event_chain()
+
+
+@settings(max_examples=40,deadline=None)
+@given(st.lists(st.sampled_from([
+    "transfer","stale_transfer","prepare","commit","inconclusive",
+    "reconcile_absent","reconcile_pending","reconcile_completed",
+    "reconcile_failed","reconcile_unknown",
+]),min_size=1,max_size=35))
+def test_generated_lifecycle_sequences_preserve_invariants(commands):
+    with tempfile.TemporaryDirectory() as directory:
+        _exercise_generated_lifecycle_sequence(commands,Path(directory) / "generated.sqlite3")
 
 
 def test_stale_pending_evidence_cannot_regress_verified_operation(active_system):
