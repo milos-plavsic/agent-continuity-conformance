@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from .errors import ProviderUnavailable
 from .models import ProviderRecord
 
+
 @dataclass(slots=True)
 class _StoredRequest:
     idempotency_key: str
