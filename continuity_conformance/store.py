@@ -17,8 +17,9 @@ class OperationStore:
     """Durable registry. Production deployments must validate their own DB guarantees."""
     def __init__(self, database: str | Path) -> None:
         self.database = str(database)
-        if self.database != ":memory:":
-            Path(self.database).parent.mkdir(parents=True, exist_ok=True)
+        if self.database == ":memory:":
+            raise ValueError("Use a file-backed SQLite database so operations survive connection changes")
+        Path(self.database).parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
@@ -66,6 +67,7 @@ class OperationStore:
         if not operation_id.strip():
             raise ValueError("operation_id must not be empty")
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             db.execute("INSERT INTO operations(operation_id,generation,state,payload,provider_key) VALUES(?,0,?,?,?)",
                        (operation_id,OperationState.PROPOSED.value,payload,operation_id))
             self._append_event(db,operation_id,0,"OPERATION_PROPOSED",{"payload":payload})
@@ -73,21 +75,27 @@ class OperationStore:
 
     def approve(self, operation_id: str) -> dict[str, Any]:
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = self._require(db,operation_id)
             if row["state"] != OperationState.PROPOSED.value:
                 raise InvalidTransition(f"Cannot approve operation in {row['state']} state")
-            db.execute("UPDATE operations SET state=?,version=version+1 WHERE operation_id=?",
-                       (OperationState.APPROVED.value,operation_id))
+            changed = db.execute("UPDATE operations SET state=?,version=version+1 WHERE operation_id=? AND state=?",
+                                 (OperationState.APPROVED.value,operation_id,OperationState.PROPOSED.value)).rowcount
+            if changed != 1:
+                raise InvalidTransition("Operation approval lost a concurrent state race")
             self._append_event(db,operation_id,0,"OPERATION_APPROVED",{})
         return self.get_operation(operation_id)
 
     def activate(self, operation_id: str) -> dict[str, Any]:
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = self._require(db,operation_id)
             if row["state"] != OperationState.APPROVED.value:
                 raise InvalidTransition(f"Cannot activate operation in {row['state']} state")
-            db.execute("UPDATE operations SET generation=1,state=?,version=version+1 WHERE operation_id=? AND generation=0",
-                       (OperationState.FENCED.value,operation_id))
+            changed = db.execute("UPDATE operations SET generation=1,state=?,version=version+1 WHERE operation_id=? AND generation=0 AND state=?",
+                                 (OperationState.FENCED.value,operation_id,OperationState.APPROVED.value)).rowcount
+            if changed != 1:
+                raise InvalidTransition("Initial ownership activation lost a concurrent state race")
             self._append_event(db,operation_id,1,"GENERATION_ACTIVATED",{})
         return self.get_operation(operation_id)
 
@@ -99,45 +107,56 @@ class OperationStore:
 
     def prepare_attempt(self, operation_id: str, generation: int) -> dict[str, Any]:
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = self._require(db,operation_id)
             self._check_generation(row,generation)
             if row["state"] not in {OperationState.FENCED.value,OperationState.RECONCILED.value}:
                 raise InvalidTransition(f"Cannot prepare an attempt in {row['state']} state")
+            changed = db.execute("UPDATE operations SET state=?,version=version+1 WHERE operation_id=? AND generation=? AND state IN (?,?)",
+                                 (OperationState.PREPARED.value,operation_id,generation,
+                                  OperationState.FENCED.value,OperationState.RECONCILED.value)).rowcount
+            if changed != 1:
+                raise InvalidTransition("Attempt preparation lost a concurrent state race")
             attempt_id = str(uuid.uuid4())
             db.execute("INSERT INTO attempts(attempt_id,operation_id,generation,provider_key,status) VALUES(?,?,?,?,?)",
                        (attempt_id,operation_id,generation,row["provider_key"],"prepared"))
-            db.execute("UPDATE operations SET state=?,version=version+1 WHERE operation_id=?",
-                       (OperationState.PREPARED.value,operation_id))
             self._append_event(db,operation_id,generation,"ATTEMPT_PREPARED",
                                {"attempt_id":attempt_id,"provider_key":row["provider_key"]})
-        return {"attempt_id":attempt_id,"provider_key":row["provider_key"],"generation":generation}
+        return {"attempt_id":attempt_id,"provider_key":row["provider_key"],
+                "generation":generation,"payload":row["payload"]}
 
     def mark_committed(self, operation_id: str, generation: int, attempt_id: str,
                        request_id: str) -> dict[str, Any]:
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = self._require(db,operation_id)
             self._check_generation(row,generation)
             attempt = db.execute("SELECT * FROM attempts WHERE attempt_id=? AND operation_id=?",
                                  (attempt_id,operation_id)).fetchone()
             if attempt is None:
                 raise OperationNotFound(f"Attempt {attempt_id!r} does not exist")
+            changed = db.execute("UPDATE operations SET state=?,provider_request_id=?,version=version+1 WHERE operation_id=? AND generation=?",
+                                 (OperationState.COMMITTED.value,request_id,operation_id,generation)).rowcount
+            if changed != 1:
+                raise StaleGeneration("Ownership changed before the admission record could be committed")
             db.execute("UPDATE attempts SET provider_request_id=?,status='admitted' WHERE attempt_id=?",
                        (request_id,attempt_id))
-            db.execute("UPDATE operations SET state=?,provider_request_id=?,version=version+1 WHERE operation_id=?",
-                       (OperationState.COMMITTED.value,request_id,operation_id))
             self._append_event(db,operation_id,generation,"PROVIDER_ADMITTED",
                                {"attempt_id":attempt_id,"provider_request_id":request_id})
         return self.get_operation(operation_id)
 
     def transfer(self, operation_id: str, generation: int) -> dict[str, Any]:
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = self._require(db,operation_id)
             self._check_generation(row,generation)
             if row["state"] in {OperationState.VERIFIED.value,OperationState.FAILED.value}:
                 raise InvalidTransition(f"Cannot transfer a terminal operation in {row['state']}")
             next_generation = generation + 1
-            db.execute("UPDATE operations SET generation=?,version=version+1 WHERE operation_id=? AND generation=?",
-                       (next_generation,operation_id,generation))
+            changed = db.execute("UPDATE operations SET generation=?,version=version+1 WHERE operation_id=? AND generation=?",
+                                 (next_generation,operation_id,generation)).rowcount
+            if changed != 1:
+                raise StaleGeneration("Ownership transfer lost a concurrent generation race")
             self._append_event(db,operation_id,next_generation,"OWNERSHIP_TRANSFERRED",
                                {"previous_generation":generation})
         return self.get_operation(operation_id)
@@ -145,8 +164,11 @@ class OperationStore:
     def reconcile(self, operation_id: str, generation: int,
                   record: ProviderRecord | None) -> dict[str, Any]:
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = self._require(db,operation_id)
             self._check_generation(row,generation)
+            if row["state"] in {OperationState.VERIFIED.value,OperationState.FAILED.value}:
+                raise InvalidTransition(f"Cannot reconcile a terminal operation in {row['state']} state")
             if record is None:
                 state,status,request_id = OperationState.RECONCILED,"not_found",None
             elif record.status == "completed":
@@ -179,8 +201,16 @@ class OperationStore:
 
     def events(self, operation_id: str | None = None) -> list[dict[str, Any]]:
         with self._connect() as db:
-            query = "SELECT * FROM events ORDER BY sequence" if operation_id is None else                     "SELECT * FROM events WHERE operation_id=? ORDER BY sequence"
-            rows = db.execute(query) .fetchall() if operation_id is None else                    db.execute(query,(operation_id,)).fetchall()
+            query = (
+                "SELECT * FROM events ORDER BY sequence"
+                if operation_id is None
+                else "SELECT * FROM events WHERE operation_id=? ORDER BY sequence"
+            )
+            rows = (
+                db.execute(query).fetchall()
+                if operation_id is None
+                else db.execute(query,(operation_id,)).fetchall()
+            )
             return [dict(row) for row in rows]
 
     def verify_event_chain(self) -> bool:
@@ -191,10 +221,13 @@ class OperationStore:
             for row in rows:
                 if row["previous_hash"] != previous:
                     return False
-                body = {"operation_id":row["operation_id"],"generation":row["generation"],
-                        "event_type":row["event_type"],"details":json.loads(row["details_json"]),
-                        "created_at":row["created_at"],"previous_hash":row["previous_hash"]}
-                digest = hashlib.sha256(_canonical(body).encode()).hexdigest()
+                try:
+                    body = {"operation_id":row["operation_id"],"generation":row["generation"],
+                            "event_type":row["event_type"],"details":json.loads(row["details_json"]),
+                            "created_at":row["created_at"],"previous_hash":row["previous_hash"]}
+                    digest = hashlib.sha256(_canonical(body).encode()).hexdigest()
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    return False
                 if digest != row["event_hash"]:
                     return False
                 previous = digest
