@@ -1,5 +1,7 @@
 from __future__ import annotations
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 import pytest
 from continuity_conformance import (
     ContinuityService, DeterministicProvider, InvalidTransition, OperationNotFound,
@@ -211,3 +213,18 @@ def test_hash_chain_returns_false_for_malformed_event_json(active_system):
     with sqlite3.connect(store.database) as db:
         db.execute("UPDATE events SET details_json=? WHERE sequence=1",("{",))
     assert store.verify_event_chain() is False
+
+def test_concurrent_handover_has_one_winner(active_system):
+    store,_,service = active_system
+    barrier = Barrier(2)
+    def handover():
+        barrier.wait()
+        try:
+            service.handover("op-1",1)
+            return "transferred"
+        except StaleGeneration:
+            return "stale"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(lambda _: handover(), range(2)))
+    assert sorted(outcomes) == ["stale","transferred"]
+    assert store.get_operation("op-1")["generation"] == 2
