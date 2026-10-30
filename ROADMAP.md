@@ -28,7 +28,7 @@ Known limitation: the per-operation lock is process-local. It does not provide c
 
 ## Phase 2: Adversarial conformance suite
 
-The expanded automated suite currently contains 44 tests and includes 40 generated lifecycle-sequence examples per property-based test invocation. Coverage includes:
+The expanded automated suite currently contains 46 tests and includes 40 generated lifecycle-sequence examples per property-based test invocation. Coverage includes:
 
 - Stale generation rejected before provider admission.
 - Lost acknowledgement reconciled without duplicate provider effect.
@@ -51,10 +51,8 @@ The expanded automated suite currently contains 44 tests and includes 40 generat
 
 Remaining work:
 
-1. Add explicit replay tests for previously valid evidence presented in a later lifecycle context.
-2. Extend provider simulation to model contradictory observations across repeated status queries.
-3. Publish versioned, portable signed evidence with an offline verifier (Phase 3).
-4. Conduct an independent interoperability exercise (Phase 4).
+1. Publish versioned, portable signed evidence with an offline verifier (Phase 3).
+2. Conduct an independent interoperability exercise (Phase 4).
 
 ## Phase 3: Portable evidence package
 
