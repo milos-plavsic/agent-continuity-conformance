@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 import tempfile
-from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 from threading import Barrier
 
